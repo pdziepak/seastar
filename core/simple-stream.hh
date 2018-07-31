@@ -21,6 +21,7 @@
 
 #pragma once
 #include "core/sstring.hh"
+#include "util/variant_utils.hh"
 
 namespace seastar {
 
@@ -40,6 +41,15 @@ struct simple_stream_tag {};
 
 template<typename>
 class memory_output_stream;
+
+template<typename Iterator>
+class simple_memory_input_stream;
+
+template<typename Iterator>
+class fragmented_memory_input_stream;
+
+template<typename Iterator>
+class memory_input_stream;
 
 class simple_memory_output_stream {
     char* _p = nullptr;
@@ -91,6 +101,9 @@ public:
     const size_t size() const {
         return _size;
     }
+
+    template<typename Iterator = simple_stream_tag>
+    simple_memory_input_stream<Iterator> to_input_stream() const;
 };
 
 template<typename Iterator>
@@ -100,6 +113,8 @@ class fragmented_memory_output_stream {
     Iterator _it;
     simple _current;
     size_t _size;
+
+    friend class memory_input_stream<Iterator>;
 private:
     template<typename Func>
     //requires requires(Func f, view bv) { { f(bv) } -> void; }
@@ -156,6 +171,8 @@ public:
     const size_t size() const {
         return _size;
     }
+
+    fragmented_memory_input_stream<Iterator> to_input_stream() const;
 };
 
 template<typename Iterator>
@@ -288,6 +305,8 @@ public:
             return stream.size();
         });
     }
+
+    memory_input_stream<Iterator> to_input_stream() const;
 };
 
 template<typename Iterator>
@@ -372,6 +391,7 @@ private:
     }
     fragmented_memory_input_stream(Iterator it, simple bv, size_t size)
         : _it(it), _current(bv), _size(size) { }
+    friend class fragmented_memory_output_stream<Iterator>;
 public:
     using has_with_stream = std::false_type;
     using iterator_type = Iterator;
@@ -558,6 +578,28 @@ public:
     template<typename Stream, typename StreamVisitor>
     friend decltype(auto) with_serialized_stream(Stream& stream, StreamVisitor&& visitor);
 };
+
+template<typename Iterator>
+inline simple_memory_input_stream<Iterator> simple_memory_output_stream::to_input_stream() const {
+    return simple_memory_input_stream<Iterator>(_p, _size);
+}
+
+template<typename Iterator>
+inline fragmented_memory_input_stream<Iterator> fragmented_memory_output_stream<Iterator>::to_input_stream() const {
+    return fragmented_memory_input_stream<Iterator>(_it, _current.to_input_stream<Iterator>(), _size);
+}
+
+template<typename Iterator>
+inline memory_input_stream<Iterator> memory_output_stream<Iterator>::to_input_stream() const {
+    return with_stream(make_visitor(
+        [] (const simple_memory_output_stream& ostream) -> memory_input_stream<Iterator> {
+            return ostream.to_input_stream<Iterator>();
+        },
+        [] (const fragmented_memory_output_stream<Iterator>& ostream) -> memory_input_stream<Iterator> {
+            return ostream.to_input_stream();
+        }
+    ));
+}
 
 // The purpose of the with_serialized_stream() is to minimize number of dynamic
 // dispatches. For example, a lot of IDL-generated code looks like this:
