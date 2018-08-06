@@ -112,7 +112,7 @@ class fragmented_memory_output_stream {
 
     Iterator _it;
     simple _current;
-    size_t _size;
+    size_t _size = 0;
 
     friend class memory_input_stream<Iterator>;
 private:
@@ -138,6 +138,9 @@ private:
 public:
     using has_with_stream = std::false_type;
     using iterator_type = Iterator;
+
+    fragmented_memory_output_stream() = default;
+
     fragmented_memory_output_stream(Iterator it, size_t size)
         : _it(it), _size(size) {
     }
@@ -209,6 +212,8 @@ public:
 public:
     using has_with_stream = std::true_type;
     using iterator_type = Iterator;
+    memory_output_stream()
+            : _is_simple(true), _simple() {}    
     memory_output_stream(simple stream)
             : _is_simple(true), _simple(std::move(stream)) {}
     memory_output_stream(fragmented stream)
