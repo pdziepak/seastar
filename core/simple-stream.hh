@@ -37,7 +37,17 @@ public:
     }
 };
 
-struct simple_stream_tag {};
+struct simple_stream_tag {
+    using value_type = const temporary_buffer<char>;
+
+    value_type operator*() { return { }; }
+
+    simple_stream_tag& operator++() { return *this; }
+    simple_stream_tag operator++(int) { return *this; }
+
+    bool operator==(const simple_stream_tag&) const { return true; }
+    bool operator!=(const simple_stream_tag&) const { return false; }
+};
 
 template<typename>
 class memory_output_stream;
