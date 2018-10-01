@@ -177,6 +177,9 @@ struct rcv_buf {
     using iterator = std::vector<temporary_buffer<char>>::iterator;
     rcv_buf() {}
     explicit rcv_buf(size_t size_) : size(size_) {}
+    explicit rcv_buf(temporary_buffer<char> b) : size(b.size()), bufs(std::move(b)) {};
+    explicit rcv_buf(std::vector<temporary_buffer<char>> bufs, size_t size)
+        : size(size), bufs(std::move(bufs)) {};
 };
 
 struct snd_buf {
@@ -187,6 +190,12 @@ struct snd_buf {
     snd_buf() {}
     explicit snd_buf(size_t size_);
     explicit snd_buf(temporary_buffer<char> b) : size(b.size()), bufs(std::move(b)) {};
+
+    // The size of all buffers except the last one has to be equal chunk_size. The last
+    // one has to be smaller than or equal chunk_size.
+    explicit snd_buf(std::vector<temporary_buffer<char>> bufs, size_t size)
+        : size(size), bufs(std::move(bufs)) {};
+
     temporary_buffer<char>& front();
 };
 
