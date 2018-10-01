@@ -476,6 +476,7 @@ core = [
     'net/inet_address.cc',
     'rpc/rpc.cc',
     'rpc/lz4_compressor.cc',
+    'rpc/lz4_fragmented_compressor.cc',
     'core/exception_hacks.cc',
     'core/future-util.cc',
     ]

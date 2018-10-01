@@ -25,6 +25,7 @@
 #include "rpc/rpc.hh"
 #include "rpc/rpc_types.hh"
 #include "rpc/lz4_compressor.hh"
+#include "rpc/lz4_fragmented_compressor.hh"
 #include "rpc/multi_algo_compressor_factory.hh"
 #include "test-utils.hh"
 #include "core/thread.hh"
@@ -670,4 +671,8 @@ void test_compressor() {
 
 SEASTAR_THREAD_TEST_CASE(test_lz4_compressor) {
     test_compressor<rpc::lz4_compressor>();
+}
+
+SEASTAR_THREAD_TEST_CASE(test_lz4_fragmented_compressor) {
+    test_compressor<rpc::lz4_fragmented_compressor>();
 }
