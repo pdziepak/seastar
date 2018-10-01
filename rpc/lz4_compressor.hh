@@ -28,6 +28,7 @@
 namespace seastar {
 
 namespace rpc {
+    // Deprecated, use lz4_fragmented_compressor instead.
     class lz4_compressor : public compressor {
     public:
         class factory: public rpc::compressor::factory {
