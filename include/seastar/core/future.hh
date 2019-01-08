@@ -521,6 +521,13 @@ public:
     void set_exception(Exception&& e) noexcept {
         set_exception(make_exception_ptr(std::forward<Exception>(e)));
     }
+
+#if SEASTAR_COROUTINES_TS
+    void set_coroutine(future_state<T...>& state, task_ptr coroutine) {
+        _state = &state;
+        _task = std::move(coroutine);
+    }
+#endif
 private:
     template<urgent Urgent>
     void do_set_value(std::tuple<T...> result) noexcept {
@@ -1192,6 +1199,15 @@ public:
         state()->ignore();
     }
 
+#if SEASTAR_COROUTINES_TS
+    void set_coroutine(task_ptr coroutine) {
+        assert(!state()->available());
+        assert(_promise);
+        _promise->set_coroutine(_local_state, std::move(coroutine));
+        _promise->_future = nullptr;
+        _promise = nullptr;
+    }
+#endif
 private:
     void set_callback(std::unique_ptr<continuation_base<T...>, task::deleter> callback) {
         if (state()->available()) {
