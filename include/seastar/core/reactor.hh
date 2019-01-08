@@ -732,7 +732,7 @@ private:
         uint8_t _id;
         sched_clock::duration _runtime = {};
         uint64_t _tasks_processed = 0;
-        circular_buffer<std::unique_ptr<task>> _q;
+        circular_buffer<task_ptr> _q;
         sstring _name;
         int64_t to_vruntime(sched_clock::duration runtime) const;
         void set_shares(float shares);
@@ -748,7 +748,7 @@ private:
     sched_clock::duration _task_quota;
     /// Handler that will be called when there is no task to execute on cpu.
     /// It represents a low priority work.
-    /// 
+    ///
     /// Handler's return value determines whether handler did any actual work. If no work was done then reactor will go
     /// into sleep.
     ///
@@ -962,10 +962,10 @@ public:
     }
 
 #ifdef SEASTAR_SHUFFLE_TASK_QUEUE
-    void shuffle(std::unique_ptr<task>&, task_queue&);
+    void shuffle(task_ptr&, task_queue&);
 #endif
 
-    void add_task(std::unique_ptr<task>&& t) {
+    void add_task(task_ptr&& t) {
         auto sg = t->group();
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
@@ -977,7 +977,7 @@ public:
             activate(*q);
         }
     }
-    void add_urgent_task(std::unique_ptr<task>&& t) {
+    void add_urgent_task(task_ptr&& t) {
         auto sg = t->group();
         auto* q = _task_queues[sg._id].get();
         bool was_empty = q->_q.empty();
@@ -992,7 +992,7 @@ public:
 
     /// Set a handler that will be called when there is no task to execute on cpu.
     /// Handler should do a low priority work.
-    /// 
+    ///
     /// Handler's return value determines whether handler did any actual work. If no work was done then reactor will go
     /// into sleep.
     ///
@@ -1003,7 +1003,7 @@ public:
     }
     void force_poll();
 
-    void add_high_priority_task(std::unique_ptr<task>&&);
+    void add_high_priority_task(task_ptr&&);
 
     network_stack& net() { return *_network_stack; }
     shard_id cpu_id() const { return _id; }

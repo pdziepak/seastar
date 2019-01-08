@@ -197,7 +197,7 @@ public:
     }
     future<> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
-        std::unique_ptr<repeater> zis{this};
+        std::unique_ptr<repeater, task::deleter> zis{this};
         if (_state.failed()) {
             _promise.set_exception(std::move(_state).get_exception());
             return;
@@ -226,6 +226,9 @@ public:
         }
         _state.set(stop_iteration::no);
         schedule(std::move(zis));
+    }
+    virtual void dispose() noexcept override {
+        delete this;
     }
 };
 
@@ -282,7 +285,7 @@ future<> repeat(AsyncAction action) {
             if (!f.available()) {
               return [&] () noexcept {
                 memory::disable_failure_guard dfg;
-                auto repeater = std::make_unique<internal::repeater<futurized_action_type>>(std::move(futurized_action));
+                auto repeater = make_task_ptr<internal::repeater<futurized_action_type>>(std::move(futurized_action));
                 auto ret = repeater->get_future();
                 internal::set_callback(f, std::move(repeater));
                 return ret;
@@ -294,7 +297,7 @@ future<> repeat(AsyncAction action) {
             }
         } while (!need_preempt());
 
-        auto repeater = std::make_unique<internal::repeater<futurized_action_type>>(stop_iteration::no, std::move(futurized_action));
+        auto repeater = make_task_ptr<internal::repeater<futurized_action_type>>(stop_iteration::no, std::move(futurized_action));
         auto ret = repeater->get_future();
         schedule(std::move(repeater));
         return ret;
@@ -341,7 +344,7 @@ public:
     }
     future<T> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
-        std::unique_ptr<repeat_until_value_state> zis{this};
+        std::unique_ptr<repeat_until_value_state, task::deleter> zis{this};
         if (this->_state.failed()) {
             _promise.set_exception(std::move(this->_state).get_exception());
             return;
@@ -373,10 +376,13 @@ public:
         this->_state.set(compat::nullopt);
         schedule(std::move(zis));
     }
+    virtual void dispose() noexcept override {
+        delete this;
+    }
 };
 
 }
-    
+
 /// Invokes given action until it fails or the function requests iteration to stop by returning
 /// an engaged \c future<compat::optional<T>>.  The value is extracted from the
 /// \c optional, and returned, as a future, from repeat_until_value().
@@ -407,7 +413,7 @@ repeat_until_value(AsyncAction action) {
         if (!f.available()) {
           return [&] () noexcept {
             memory::disable_failure_guard dfg;
-            auto state = std::make_unique<internal::repeat_until_value_state<futurized_action_type, value_type>>(std::move(futurized_action));
+            auto state = make_task_ptr<internal::repeat_until_value_state<futurized_action_type, value_type>>(std::move(futurized_action));
             auto ret = state->get_future();
             internal::set_callback(f, std::move(state));
             return ret;
@@ -425,7 +431,7 @@ repeat_until_value(AsyncAction action) {
     } while (!need_preempt());
 
     try {
-        auto state = std::make_unique<internal::repeat_until_value_state<futurized_action_type, value_type>>(compat::nullopt, std::move(futurized_action));
+        auto state = make_task_ptr<internal::repeat_until_value_state<futurized_action_type, value_type>>(compat::nullopt, std::move(futurized_action));
         auto f = state->get_future();
         schedule(std::move(state));
         return f;
@@ -445,7 +451,7 @@ public:
     explicit do_until_state(StopCondition stop, AsyncAction action) : _stop(std::move(stop)), _action(std::move(action)) {}
     future<> get_future() { return _promise.get_future(); }
     virtual void run_and_dispose() noexcept override {
-        std::unique_ptr<do_until_state> zis{this};
+        std::unique_ptr<do_until_state, task::deleter> zis{this};
         if (_state.available()) {
             if (_state.failed()) {
                 _state.forward_to(_promise);
@@ -475,10 +481,13 @@ public:
         }
         schedule(std::move(zis));
     }
+    virtual void dispose() noexcept override {
+        delete this;
+    }
 };
 
 }
-    
+
 /// Invokes given action until it fails or given condition evaluates to true.
 ///
 /// \param stop_cond a callable taking no arguments, returning a boolean that
@@ -503,7 +512,7 @@ future<> do_until(StopCondition stop_cond, AsyncAction action) {
         if (!f.available()) {
           return [&] () noexcept {
             memory::disable_failure_guard dfg;
-            auto task = std::make_unique<do_until_state<StopCondition, AsyncAction>>(std::move(stop_cond), std::move(action));
+            auto task = make_task_ptr<do_until_state<StopCondition, AsyncAction>>(std::move(stop_cond), std::move(action));
             auto ret = task->get_future();
             internal::set_callback(f, std::move(task));
             return ret;
@@ -514,7 +523,7 @@ future<> do_until(StopCondition stop_cond, AsyncAction action) {
         }
     } while (!need_preempt());
 
-    auto task = std::make_unique<do_until_state<StopCondition, AsyncAction>>(std::move(stop_cond), std::move(action));
+    auto task = make_task_ptr<do_until_state<StopCondition, AsyncAction>>(std::move(stop_cond), std::move(action));
     auto f = task->get_future();
     schedule(std::move(task));
     return f;
@@ -672,7 +681,7 @@ public:
 };
 
 template <typename Future>
-class when_all_state_component : public continuation_base_for_future_t<Future> {
+class when_all_state_component final : public continuation_base_for_future_t<Future> {
     when_all_state_base* _base;
     Future* _final_resting_place;
 public:
@@ -682,7 +691,7 @@ public:
             return true;
         } else {
             auto c = new (continuation) when_all_state_component(wasb, f);
-            set_callback(*f, std::unique_ptr<when_all_state_component>(c));
+            set_callback(*f, std::unique_ptr<when_all_state_component, task::deleter>(c));
             return false;
         }
     }
@@ -697,6 +706,9 @@ public:
         auto base = _base;
         this->~when_all_state_component();
         base->complete_one();
+    }
+    virtual void dispose() noexcept override {
+        this->~when_all_state_component();
     }
 };
 

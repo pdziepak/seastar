@@ -414,13 +414,16 @@ struct continuation final : continuation_base<T...> {
         _func(std::move(this->_state));
         delete this;
     }
+    virtual void dispose() noexcept override {
+        delete this;
+    }
     Func _func;
 };
 
 namespace internal {
 
 template <typename... T, typename U>
-void set_callback(future<T...>& fut, std::unique_ptr<U> callback);
+void set_callback(future<T...>& fut, std::unique_ptr<U, task::deleter> callback);
 
 }
 
@@ -435,7 +438,7 @@ class promise {
     future<T...>* _future = nullptr;
     future_state<T...> _local_state;
     future_state<T...>* _state;
-    std::unique_ptr<continuation_base<T...>> _task;
+    task_ptr _task;
     static constexpr bool copy_noexcept = future_state<T...>::copy_noexcept;
 public:
     /// \brief Constructs an empty \c promise.
@@ -547,11 +550,11 @@ private:
 private:
     template <typename Func>
     void schedule(Func&& func) {
-        auto tws = std::make_unique<continuation<Func, T...>>(std::move(func));
+        auto tws = make_task_ptr<continuation<Func, T...>>(std::move(func));
         _state = &tws->_state;
         _task = std::move(tws);
     }
-    void schedule(std::unique_ptr<continuation_base<T...>> callback) {
+    void schedule(std::unique_ptr<continuation_base<T...>, task::deleter> callback) {
         _state = &callback->_state;
         _task = std::move(callback);
     }
@@ -760,7 +763,7 @@ private:
     template <typename Func>
     void schedule(Func&& func) {
         if (state()->available()) {
-            ::seastar::schedule(std::make_unique<continuation<Func, T...>>(std::move(func), std::move(*state())));
+            ::seastar::schedule(make_task_ptr<continuation<Func, T...>>(std::move(func), std::move(*state())));
         } else {
             assert(_promise);
             _promise->schedule(std::move(func));
@@ -897,12 +900,13 @@ private:
             // no need to delete, since this is always allocated on
             // _thread's stack.
         }
+        virtual void dispose() noexcept override { }
     };
     void do_wait() noexcept {
         auto thread = thread_impl::get();
         assert(thread);
         thread_wake_task wake_task{thread, this};
-        _promise->schedule(std::unique_ptr<continuation_base<T...>>(&wake_task));
+        _promise->schedule(std::unique_ptr<continuation_base<T...>, task::deleter>(&wake_task));
         _promise->_future = nullptr;
         _promise = nullptr;
         thread_impl::switch_out(thread);
@@ -1189,7 +1193,7 @@ public:
     }
 
 private:
-    void set_callback(std::unique_ptr<continuation_base<T...>> callback) {
+    void set_callback(std::unique_ptr<continuation_base<T...>, task::deleter> callback) {
         if (state()->available()) {
             callback->set_state(get_available_state());
             ::seastar::schedule(std::move(callback));
@@ -1212,7 +1216,7 @@ private:
     template <typename... U, typename Exception>
     friend future<U...> make_exception_future(Exception&& ex) noexcept;
     template <typename... U, typename V>
-    friend void internal::set_callback(future<U...>&, std::unique_ptr<V>);
+    friend void internal::set_callback(future<U...>&, std::unique_ptr<V, task::deleter>);
     /// \endcond
 };
 
@@ -1475,7 +1479,7 @@ namespace internal {
 
 template <typename... T, typename U>
 inline
-void set_callback(future<T...>& fut, std::unique_ptr<U> callback) {
+void set_callback(future<T...>& fut, std::unique_ptr<U, task::deleter> callback) {
     // It would be better to use continuation_base<T...> for U, but
     // then a derived class of continuation_base<T...> won't be matched
     return fut.set_callback(std::move(callback));

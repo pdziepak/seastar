@@ -132,7 +132,7 @@ struct mountpoint_params {
 };
 
 }
-    
+
 namespace YAML {
 template<>
 struct convert<seastar::mountpoint_params> {
@@ -1243,7 +1243,7 @@ reactor::task_quota_timer_thread_fn() {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 
     sigset_t mask;
-    sigfillset(&mask);            
+    sigfillset(&mask);
     for (auto sig : { SIGSEGV }) {
         sigdelset(&mask, sig);
     }
@@ -1272,7 +1272,7 @@ reactor::task_quota_timer_thread_fn() {
         std::atomic_signal_fence(std::memory_order_seq_cst);
     }
 }
-void 
+void
 reactor::update_blocked_reactor_notify_ms(std::chrono::milliseconds ms) {
     auto cfg = _cpu_stall_detector->get_config();
     if (ms != cfg.threshold) {
@@ -3289,7 +3289,7 @@ void reactor::run_tasks(task_queue& tq) {
 }
 
 #ifdef SEASTAR_SHUFFLE_TASK_QUEUE
-void reactor::shuffle(std::unique_ptr<task>& t, task_queue& q) {
+void reactor::shuffle(task_ptr& t, task_queue& q) {
     static thread_local std::mt19937 gen = std::mt19937(std::default_random_engine()());
     std::uniform_int_distribution<size_t> tasks_dist{0, q._q.size() - 1};
     auto& to_swap = q._q[tasks_dist(gen)];
@@ -3951,7 +3951,7 @@ reactor::pure_poll_once() {
     return false;
 }
 
-class reactor::poller::registration_task : public task {
+class reactor::poller::registration_task final : public task {
 private:
     poller* _p;
 public:
@@ -3963,6 +3963,9 @@ public:
         }
         delete this;
     }
+    virtual void dispose() noexcept override {
+        delete this;
+    }
     void cancel() {
         _p = nullptr;
     }
@@ -3971,13 +3974,16 @@ public:
     }
 };
 
-class reactor::poller::deregistration_task : public task {
+class reactor::poller::deregistration_task final : public task {
 private:
     std::unique_ptr<pollfn> _p;
 public:
     explicit deregistration_task(std::unique_ptr<pollfn>&& p) : _p(std::move(p)) {}
     virtual void run_and_dispose() noexcept override {
         engine().unregister_poller(_p.get());
+        delete this;
+    }
+    virtual void dispose() noexcept override {
         delete this;
     }
 };
@@ -4016,7 +4022,7 @@ reactor::poller::do_register() {
     // may be running inside a poller ourselves, and so in the middle of
     // iterating reactor::_pollers itself.  So we schedule a task to add
     // the poller instead.
-    auto task = std::make_unique<registration_task>(this);
+    auto task = make_task_ptr<registration_task>(this);
     auto tmp = task.get();
     engine().add_task(std::move(task));
     _registration_task = tmp;
@@ -4038,7 +4044,7 @@ reactor::poller::~poller() {
         } else {
             auto dummy = make_pollfn([] { return false; });
             auto dummy_p = dummy.get();
-            auto task = std::make_unique<deregistration_task>(std::move(dummy));
+            auto task = make_task_ptr<deregistration_task>(std::move(dummy));
             engine().add_task(std::move(task));
             engine().replace_poller(_pollfn.get(), dummy_p);
         }
@@ -4351,11 +4357,11 @@ future<size_t> readable_eventfd::wait() {
     });
 }
 
-void schedule(std::unique_ptr<task> t) {
+void schedule(task_ptr t) {
     engine().add_task(std::move(t));
 }
 
-void schedule_urgent(std::unique_ptr<task> t) {
+void schedule_urgent(task_ptr t) {
     engine().add_urgent_task(std::move(t));
 }
 
@@ -5281,7 +5287,7 @@ future<connected_socket> connect(socket_address sa, socket_address local, transp
     return engine().connect(sa, local, proto);
 }
 
-void reactor::add_high_priority_task(std::unique_ptr<task>&& t) {
+void reactor::add_high_priority_task(task_ptr&& t) {
     add_urgent_task(std::move(t));
     // break .then() chains
     request_preemption();

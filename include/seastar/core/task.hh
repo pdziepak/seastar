@@ -29,14 +29,25 @@ namespace seastar {
 class task {
     scheduling_group _sg;
 public:
-    explicit task(scheduling_group sg = current_scheduling_group()) : _sg(sg) {}
+    struct deleter {
+        void operator()(task* t) const noexcept {
+            t->dispose();
+        }
+    };
+protected:
     virtual ~task() noexcept {}
+public:
+    explicit task(scheduling_group sg = current_scheduling_group()) : _sg(sg) {}
+
     virtual void run_and_dispose() noexcept = 0;
+    virtual void dispose() noexcept { delete this; }
     scheduling_group group() const { return _sg; }
 };
 
-void schedule(std::unique_ptr<task> t);
-void schedule_urgent(std::unique_ptr<task> t);
+using task_ptr = std::unique_ptr<task, task::deleter>;
+
+void schedule(task_ptr t);
+void schedule_urgent(task_ptr t);
 
 template <typename Func>
 class lambda_task final : public task {
@@ -50,18 +61,24 @@ public:
     }
 };
 
-template <typename Func>
-inline
-std::unique_ptr<task>
-make_task(Func&& func) {
-    return std::make_unique<lambda_task<Func>>(current_scheduling_group(), std::forward<Func>(func));
+template<typename T, typename... Args>
+std::unique_ptr<T, task::deleter> make_task_ptr(Args&&... args) {
+    static_assert(std::is_base_of<task, T>::value, "");
+    return std::unique_ptr<T, task::deleter>(new T(std::forward<Args>(args)...));
 }
 
 template <typename Func>
 inline
-std::unique_ptr<task>
+task_ptr
+make_task(Func&& func) {
+    return make_task_ptr<lambda_task<Func>>(current_scheduling_group(), std::forward<Func>(func));
+}
+
+template <typename Func>
+inline
+task_ptr
 make_task(scheduling_group sg, Func&& func) {
-    return std::make_unique<lambda_task<Func>>(sg, std::forward<Func>(func));
+    return make_task_ptr<lambda_task<Func>>(sg, std::forward<Func>(func));
 }
 
 }
