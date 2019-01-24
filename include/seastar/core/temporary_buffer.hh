@@ -82,14 +82,18 @@ public:
     temporary_buffer(const temporary_buffer&) = delete;
 
     // At least at -O1, the inline decisions are such that the following code hits https://gcc.gnu.org/bugzilla/show_bug.cgi?id=88897.
+#ifndef __clang__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     /// Moves a \c temporary_buffer.
     temporary_buffer(temporary_buffer&& x) noexcept : _buffer(x._buffer), _size(x._size), _deleter(std::move(x._deleter)) {
         x._buffer = nullptr;
         x._size = 0;
     }
+#ifndef __clang__
 #pragma GCC diagnostic pop
+#endif
 
     /// Creates a \c temporary_buffer with a specific deleter.
     ///
