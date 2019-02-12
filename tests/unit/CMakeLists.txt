@@ -364,6 +364,10 @@ seastar_add_test (sstring
 seastar_add_test (stall_detector
   SOURCES stall_detector_test.cc)
 
+seastar_add_test (temporary_memory_allocator
+  KIND BOOST
+  SOURCES temporary_memory_allocator_test.cc)
+
 seastar_add_test (thread
   SOURCES thread_test.cc)
 
