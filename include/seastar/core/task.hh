@@ -24,9 +24,11 @@
 #include <memory>
 #include <seastar/core/scheduling.hh>
 
+#include <seastar/core/temporary_memory_allocator.hh>
+
 namespace seastar {
 
-class task {
+class task : public use_temporary_allocator {
     scheduling_group _sg;
 public:
     explicit task(scheduling_group sg = current_scheduling_group()) : _sg(sg) {}
