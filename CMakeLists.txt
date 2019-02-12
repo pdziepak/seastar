@@ -421,6 +421,7 @@ add_library (seastar STATIC
   include/seastar/core/systemwide_memory_barrier.hh
   include/seastar/core/task.hh
   include/seastar/core/temporary_buffer.hh
+  include/seastar/core/temporary_memory_allocator.hh
   include/seastar/core/thread.hh
   include/seastar/core/thread_cputime_clock.hh
   include/seastar/core/thread_impl.hh
@@ -525,6 +526,7 @@ add_library (seastar STATIC
   src/core/scollectd.cc
   src/core/scollectd-impl.hh
   src/core/systemwide_memory_barrier.cc
+  src/core/temporary_memory_allocator.cc
   src/core/thread.cc
   src/core/vla.hh
   src/http/api_docs.cc
