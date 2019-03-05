@@ -2249,6 +2249,9 @@ posix_file_impl::write_dma(uint64_t pos, const void* buffer, size_t len, const i
 
 future<size_t>
 posix_file_impl::write_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& io_priority_class) {
+    if (iov.size() > IOV_MAX) {
+        iov.resize(IOV_MAX);
+    }
     auto len = boost::accumulate(iov | boost::adaptors::transformed(std::mem_fn(&iovec::iov_len)), size_t(0));
     auto iov_ptr = std::make_unique<std::vector<iovec>>(std::move(iov));
     auto size = iov_ptr->size();
@@ -2273,6 +2276,9 @@ posix_file_impl::read_dma(uint64_t pos, void* buffer, size_t len, const io_prior
 
 future<size_t>
 posix_file_impl::read_dma(uint64_t pos, std::vector<iovec> iov, const io_priority_class& io_priority_class) {
+    if (iov.size() > IOV_MAX) {
+        iov.resize(IOV_MAX);
+    }
     auto len = boost::accumulate(iov | boost::adaptors::transformed(std::mem_fn(&iovec::iov_len)), size_t(0));
     auto iov_ptr = std::make_unique<std::vector<iovec>>(std::move(iov));
     auto size = iov_ptr->size();
